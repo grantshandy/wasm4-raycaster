@@ -3,7 +3,7 @@
 #![no_std]
 
 use core::{
-    f32::consts::{FRAC_PI_2, PI, TAU},
+    f32::consts::{FRAC_PI_2, PI},
     intrinsics,
 };
 
@@ -58,8 +58,7 @@ unsafe fn update() {
     );
 
     for (x, ray) in GAME.get_view().iter().enumerate() {
-        let wall_height =
-            (100.0 / (ray.distance * cosf(ray.angle_diff))).to_int_unchecked::<i32>();
+        let wall_height = (100.0 / (ray.distance * cosf(ray.angle_diff))).to_int_unchecked::<i32>();
 
         if ray.vertical {
             *DRAW_COLORS = 0x2;
@@ -221,18 +220,18 @@ fn coord_contains_wall(map: &[u16; MAP_HEIGHT], x: f32, y: f32) -> bool {
     }
 }
 
-/// "elegant" Bhaskara I sin approximation
+/// "elegant" sin approximation
 fn sinf(mut x: f32) -> f32 {
-    let y = x / TAU;
-    let z = y - floorf(y);
-    x = z * TAU;
-
-    let sin_impl = |x: f32| (16.0 * x * (PI - x)) / (FIVE_PI_SQUARED - (4.0 * x * (PI - x)));
-
-    if x > PI {
-        -sin_impl(x - PI)
+    x *= 1.0 / PI;
+    let y = floorf(x);
+    let mut z = x - y;
+    z *= 1.0 - z;
+    z *= 3.6 * z + 3.1;
+    let d = unsafe { y.to_int_unchecked::<i32>() };
+    if d & 1 != 0 {
+        -z
     } else {
-        sin_impl(x)
+        z
     }
 }
 
