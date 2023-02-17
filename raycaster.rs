@@ -90,22 +90,17 @@ struct Game {
 impl Game {
     pub fn update(&mut self, up: bool, down: bool, left: bool, right: bool) {
         let previous_position = (self.player_x, self.player_y);
-        let mut moved = false;
+        let x_diff = cosf(self.player_angle) * STEP_SIZE;
+        let y_diff = sinf(self.player_angle) * STEP_SIZE;
 
         if up {
-            self.player_x += cosf(self.player_angle) * STEP_SIZE;
-            self.player_y -= sinf(self.player_angle) * STEP_SIZE;
-            moved = true;
+            self.player_x += x_diff;
+            self.player_y -= y_diff;
         }
 
         if down {
-            self.player_x -= cosf(self.player_angle) * STEP_SIZE;
-            self.player_y += sinf(self.player_angle) * STEP_SIZE;
-            moved = true;
-        }
-
-        if moved && coord_contains_wall(&self.map, self.player_x, self.player_y) {
-            (self.player_x, self.player_y) = previous_position;
+            self.player_x -= x_diff;
+            self.player_y += y_diff;
         }
 
         if left {
@@ -114,6 +109,12 @@ impl Game {
 
         if right {
             self.player_angle -= STEP_SIZE;
+        }
+
+        if previous_position != (self.player_x, self.player_y)
+            && coord_contains_wall(&self.map, self.player_x, self.player_y)
+        {
+            (self.player_x, self.player_y) = previous_position;
         }
     }
 
@@ -155,14 +156,12 @@ impl Game {
         let mut next_y = first_y;
 
         for _ in 0..256 {
-            let cell_y = unsafe {
-                if up {
-                    (next_y + self.player_y).to_int_unchecked::<i32>() - 1
-                } else {
-                    (next_y + self.player_y).to_int_unchecked::<i32>()
-                }
-            };
+            let mut cell_y = unsafe { (next_y + self.player_y).to_int_unchecked::<i32>() };
             let cell_x = (next_x + self.player_x) as i32;
+
+            if up {
+                cell_y -= 1;
+            }
 
             if coord_contains_wall(&self.map, cell_x as f32, cell_y as f32) {
                 break;
@@ -197,14 +196,12 @@ impl Game {
         let mut next_y = first_y;
 
         for _ in 0..256 {
-            let cell_x = unsafe {
-                if right {
-                    (next_x + self.player_x).to_int_unchecked::<i32>()
-                } else {
-                    (next_x + self.player_x).to_int_unchecked::<i32>() - 1
-                }
-            };
+            let mut cell_x = unsafe { (next_x + self.player_x).to_int_unchecked::<i32>() };
             let cell_y = unsafe { (next_y + self.player_y).to_int_unchecked::<i32>() };
+
+            if !right {
+                cell_x -= 1;
+            }
 
             if coord_contains_wall(&self.map, cell_x as f32, cell_y as f32) {
                 break;
