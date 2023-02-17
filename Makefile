@@ -14,9 +14,9 @@ all:
 		-o raycaster.wasm \
 		raycaster.rs
 
-	wasm-opt -Oz ./raycaster.wasm -o raycaster.wasm
+	wasm-opt -Oz raycaster.wasm -o raycaster.wasm
 
-	du -b ./raycaster.wasm
+	du -b raycaster.wasm
 
 run: all
-	wasmstation ./raycaster.wasm	
+	wasmstation raycaster.wasm	

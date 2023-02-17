@@ -20,10 +20,11 @@ const BUTTON_UP: u8 = 64;
 const BUTTON_DOWN: u8 = 128;
 
 const FIVE_PI_SQUARED: f32 = 5.0 * (PI * PI);
-const STEP_SIZE: f32 = 0.05;
+const STEP_SIZE: f32 = 0.045;
 const FOV: f32 = PI / 2.7;
 const HALF_FOV: f32 = FOV * 0.5;
 const ANGLE_STEP: f32 = FOV / 160.0;
+const MAP_HEIGHT: usize = 8;
 
 const cosf: fn(f32) -> f32 = |x: f32| sinf(x + FRAC_PI_2);
 const tanf: fn(f32) -> f32 = |x: f32| sinf(x) / cosf(x);
@@ -34,15 +35,15 @@ const ceilf: fn(f32) -> f32 = |x: f32| unsafe { intrinsics::ceilf32(x) };
 static mut GAME: Game = Game {
     player_x: 1.5,
     player_y: 1.5,
-    player_angle: TAU,
+    player_angle: FIVE_PI_SQUARED,
     map: [
         0b1111111111111111,
-        0b1000011100000001,
-        0b1111011101110111,
-        0b1000000101000001,
-        0b1101101101111101,
-        0b1000100100100001,
-        0b1101110101110101,
+        0b1000001010000101,
+        0b1011100000110101,
+        0b1000111010010001,
+        0b1010001011110111,
+        0b1011101001100001,
+        0b1000100000001101,
         0b1111111111111111,
     ],
 };
@@ -58,7 +59,7 @@ unsafe fn update() {
 
     for (x, ray) in GAME.get_view().iter().enumerate() {
         let wall_height =
-            unsafe { (100.0 / (ray.distance * cosf(ray.angle_diff))).to_int_unchecked::<i32>() };
+            (100.0 / (ray.distance * cosf(ray.angle_diff))).to_int_unchecked::<i32>();
 
         if ray.vertical {
             *DRAW_COLORS = 0x2;
@@ -70,47 +71,39 @@ unsafe fn update() {
     }
 }
 
-#[derive(Copy, Clone)]
-struct Ray {
-    pub distance: f32,
-    pub angle_diff: f32,
-    pub vertical: bool,
-}
-
 struct Game {
     player_x: f32,
     player_y: f32,
     player_angle: f32,
-    map: [u16; 8],
+    map: [u16; MAP_HEIGHT],
 }
 
 impl Game {
     pub fn update(&mut self, up: bool, down: bool, left: bool, right: bool) {
         let previous_position = (self.player_x, self.player_y);
-        let x_diff = cosf(self.player_angle) * STEP_SIZE;
-        let y_diff = sinf(self.player_angle) * STEP_SIZE;
-
-        if up {
-            self.player_x += x_diff;
-            self.player_y -= y_diff;
-        }
+        let mut x_diff = cosf(self.player_angle) * STEP_SIZE;
+        let mut y_diff = -sinf(self.player_angle) * STEP_SIZE;
+        let mut angle_diff = STEP_SIZE;
 
         if down {
-            self.player_x -= x_diff;
+            x_diff *= -1.0;
+            y_diff *= -1.0;
+        }
+
+        if up || down {
+            self.player_x += x_diff;
             self.player_y += y_diff;
         }
 
-        if left {
-            self.player_angle += STEP_SIZE;
-        }
-
         if right {
-            self.player_angle -= STEP_SIZE;
+            angle_diff *= -1.0;
         }
 
-        if previous_position != (self.player_x, self.player_y)
-            && coord_contains_wall(&self.map, self.player_x, self.player_y)
-        {
+        if left || right {
+            self.player_angle += angle_diff;
+        }
+
+        if coord_contains_wall(&self.map, self.player_x, self.player_y) {
             (self.player_x, self.player_y) = previous_position;
         }
     }
@@ -127,13 +120,13 @@ impl Game {
         for (num, ray) in rays.iter_mut().enumerate() {
             let angle = starting_angle + num as f32 * ANGLE_STEP;
 
-            let h = self.horizontal_intersection(angle);
-            let v = self.vertical_intersection(angle);
+            let horizontal = self.horizontal_intersection(angle);
+            let vertical = self.vertical_intersection(angle);
 
-            if h.distance < v.distance {
-                *ray = h;
+            if horizontal.distance < vertical.distance {
+                *ray = horizontal;
             } else {
-                *ray = v;
+                *ray = vertical;
             }
         }
 
@@ -168,16 +161,7 @@ impl Game {
             next_y += dy;
         }
 
-        Ray {
-            distance: distance(
-                self.player_x,
-                self.player_y,
-                self.player_x + next_x,
-                self.player_y + next_y,
-            ),
-            angle_diff: angle - self.player_angle,
-            vertical: false,
-        }
+        Ray::new(next_x, next_y, self.player_angle, angle, false)
     }
 
     fn vertical_intersection(&self, angle: f32) -> Ray {
@@ -208,32 +192,33 @@ impl Game {
             next_y += dy;
         }
 
-        Ray {
-            distance: distance(
-                self.player_x,
-                self.player_y,
-                self.player_x + next_x,
-                self.player_y + next_y,
-            ),
-            angle_diff: angle - self.player_angle,
-            vertical: true,
+        Ray::new(next_x, next_y, self.player_angle, angle, true)
+    }
+}
+
+#[derive(Copy, Clone)]
+struct Ray {
+    pub distance: f32,
+    pub angle_diff: f32,
+    pub vertical: bool,
+}
+
+impl Ray {
+    pub fn new(next_x: f32, next_y: f32, player_angle: f32, angle: f32, vertical: bool) -> Self {
+        Self {
+            distance: unsafe { intrinsics::sqrtf32((next_x * next_x) + (next_y * next_y)) },
+            angle_diff: angle - player_angle,
+            vertical,
         }
     }
 }
 
-fn coord_contains_wall(map: &[u16; 8], x: f32, y: f32) -> bool {
+fn coord_contains_wall(map: &[u16; MAP_HEIGHT], x: f32, y: f32) -> bool {
     if let Some(line) = map.get(y as usize) {
         (line & (0b1 << x as usize)) != 0
     } else {
         true
     }
-}
-
-fn distance(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
-    let dy = y2 - y1;
-    let dx = x2 - x1;
-
-    unsafe { intrinsics::sqrtf32((dy * dy) + (dx * dx)) }
 }
 
 /// "elegant" Bhaskara I sin approximation
@@ -251,7 +236,6 @@ fn sinf(mut x: f32) -> f32 {
     }
 }
 
-#[inline]
 fn snap_to_grid(x: f32, ceil: bool) -> f32 {
     if ceil {
         ceilf(x) - x
