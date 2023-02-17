@@ -22,7 +22,7 @@ const BUTTON_DOWN: u8 = 128;
 const FIVE_PI_SQUARED: f32 = 5.0 * (PI * PI);
 const STEP_SIZE: f32 = 0.05;
 const FOV: f32 = PI / 2.7;
-const HALF_FOV: f32 = FOV / 2.0;
+const HALF_FOV: f32 = FOV * 0.5;
 const ANGLE_STEP: f32 = FOV / 160.0;
 
 const cosf: fn(f32) -> f32 = |x: f32| sinf(x + FRAC_PI_2);
@@ -57,7 +57,8 @@ unsafe fn update() {
     );
 
     for (x, ray) in GAME.get_view().iter().enumerate() {
-        let wall_height = (20.0 / (ray.distance * cosf(ray.angle_diff))) * 5.0;
+        let wall_height =
+            unsafe { (100.0 / (ray.distance * cosf(ray.angle_diff))).to_int_unchecked::<i32>() };
 
         if ray.vertical {
             *DRAW_COLORS = 0x2;
@@ -65,11 +66,7 @@ unsafe fn update() {
             *DRAW_COLORS = 0x3;
         }
 
-        vline(
-            159 - x as i32,
-            ((160.0 - wall_height) / 2.0).to_int_unchecked::<i32>(),
-            wall_height.to_int_unchecked::<u32>(),
-        );
+        vline(159 - x as i32, 80 - (wall_height / 2), wall_height as u32);
     }
 }
 
@@ -156,8 +153,8 @@ impl Game {
         let mut next_y = first_y;
 
         for _ in 0..256 {
-            let mut cell_y = unsafe { (next_y + self.player_y).to_int_unchecked::<i32>() };
             let cell_x = (next_x + self.player_x) as i32;
+            let mut cell_y = unsafe { (next_y + self.player_y).to_int_unchecked::<i32>() };
 
             if up {
                 cell_y -= 1;
@@ -254,6 +251,7 @@ fn sinf(mut x: f32) -> f32 {
     }
 }
 
+#[inline]
 fn snap_to_grid(x: f32, ceil: bool) -> f32 {
     if ceil {
         ceilf(x) - x
